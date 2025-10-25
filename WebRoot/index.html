@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<title>选课系统 - 登录</title>
+<link rel="stylesheet" href="assets/style.css" />
+<script src="https://cdn.jsdelivr.net/npm/jquery@3.6.0/dist/jquery.min.js"></script>
+<script src="assets/lwquery.js"></script>
+</head>
+<body>
+<header>
+  <nav>
+    <a href="index.html">登录/注册</a>
+    <a href="courses.html">课程管理/查询</a>
+    <a href="enroll.html">选课</a>
+    <a href="students.html">学生视图</a>
+    <a href="admin.html">管理员</a>
+  </nav>
+</header>
+<main>
+  <div class="card">
+    <h3>登录</h3>
+    <div class="form-row"><input id="login-username" placeholder="用户名" /></div>
+    <div class="form-row"><input id="login-password" type="password" placeholder="密码" /></div>
+    <button class="btn" id="btn-login">登录</button>
+  </div>
+  <div class="card">
+    <h3>注册</h3>
+    <div class="form-row"><input id="reg-username" placeholder="用户名" /></div>
+    <div class="form-row"><input id="reg-password" type="password" placeholder="密码" /></div>
+    <div class="form-row"><input id="reg-email" placeholder="邮箱(可选)" /></div>
+    <button class="btn" id="btn-register">注册</button>
+  </div>
+  <div class="card">
+    <h3>密码重置</h3>
+    <div class="form-row"><input id="reset-username" placeholder="用户名" /></div>
+    <div class="form-row"><input id="reset-newpwd" type="password" placeholder="新密码" /></div>
+    <button class="btn" id="btn-reset">重置密码</button>
+  </div>
+  <div class="card">
+    <button class="btn" id="btn-logout">退出登录</button>
+    <span id="user-info"></span>
+  </div>
+</main>
+<script>
+function setUserInfo(u){
+  if(u){ $('#user-info').text('当前用户: '+u.username+'('+u.role+')'); }
+  else { $('#user-info').text('未登录'); }
+}
+$('#btn-login').on('click', function(){
+  var u=$('#login-username').val().trim();
+  var p=$('#login-password').val().trim();
+  if(u.length<3||p.length<1){ alert('请输入有效的用户名和密码'); return; }
+  LW.rest('api/user', {action:'login', username:u, password:p}, function(data){ setUserInfo(data); alert('登录成功'); }, function(e,r){ alert('登录失败：'+r); });
+});
+$('#btn-register').on('click', function(){
+  var u=$('#reg-username').val().trim();
+  var p=$('#reg-password').val().trim();
+  var e=$('#reg-email').val().trim();
+  if(u.length<3||p.length<6){ alert('用户名至少3位，密码至少6位'); return; }
+  LW.rest('api/user', {action:'register', username:u, password:p, email:e}, function(data){ alert('注册成功，请登录'); }, function(err,reason){ alert('注册失败：'+reason); });
+});
+$('#btn-reset').on('click', function(){
+  var u=$('#reset-username').val().trim(); var n=$('#reset-newpwd').val().trim();
+  if(n.length<6){ alert('新密码至少6位'); return; }
+  LW.rest('api/user', {action:'reset', username:u, newPwd:n}, function(){ alert('重置成功'); }, function(e,r){ alert('重置失败：'+r); });
+});
+$('#btn-logout').on('click', function(){ LW.rest('api/user', {action:'logout'}, function(){ setUserInfo(null); alert('已退出'); }, function(e,r){ alert('退出失败：'+r); }); });
+</script>
+</body>
+</html>

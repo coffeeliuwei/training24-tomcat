@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<title>学生视图</title>
+<link rel="stylesheet" href="assets/style.css" />
+<script src="https://cdn.jsdelivr.net/npm/jquery@3.6.0/dist/jquery.min.js"></script>
+<script src="assets/lwquery.js"></script>
+</head>
+<body>
+<header>
+  <nav>
+    <a href="index.html">登录/注册</a>
+    <a href="courses.html">课程管理/查询</a>
+    <a href="enroll.html">选课</a>
+    <a href="students.html">学生视图</a>
+    <a href="admin.html">管理员</a>
+  </nav>
+</header>
+<main>
+  <div class="card">
+    <h3>学生课表（日历视图简化）</h3>
+    <table class="table" id="tbl-cal"><thead><tr><th>课程</th><th>时间</th></tr></thead><tbody></tbody></table>
+  </div>
+  <div class="card">
+    <h3>成绩单</h3>
+    <table class="table" id="tbl-grade"><thead><tr><th>课程名称</th><th>成绩</th></tr></thead><tbody></tbody></table>
+    <div class="error" id="err-students" style="display:none;color:#b00020;background:#ffecec;padding:6px;margin:6px 0;"></div>
+    <button class="btn" id="btn-export">导出CSV</button> <span id="export-link"></span>
+  </div>
+  <div class="card">
+    <h3>课程推荐</h3>
+    <ul id="rec"></ul>
+    <small id="rec-empty" style="color:#666;display:none;">暂无推荐（已选全部课程或暂无候选）</small>
+    <pre id="rec-raw" style="display:none;background:#f7f7f7;padding:8px;border:1px dashed #ccc;color:#333"></pre>
+  </div>
+</main>
+<script>
+function showErrStudents(msg){ var box=$('#err-students'); box.text(msg).show(); setTimeout(function(){ box.fadeOut(200); }, 3000); }
+function loadCal(){
+  LW.rest('api/student', {action:'calendar'}, function(list){
+    var tb=$('#tbl-cal tbody'); tb.empty();
+    // 将同一课程的多个时间段合并为一行，避免重复
+    var byTitle={}; (list||[]).forEach(function(e){ (byTitle[e.title]||(byTitle[e.title]=[])).push(e); });
+    Object.keys(byTitle).forEach(function(title){
+      var times=byTitle[title].map(function(ev){ return ev.day+' '+ev.start+'-'+ev.end; }).join('; ');
+      var tr=$('<tr/>'); tr.append('<td>'+title+'</td>'); tr.append('<td>'+times+'</td>'); tb.append(tr);
+    });
+  }, function(e,r){ showErrStudents(r); });
+}
+function loadGrades(){
+  // 先取课程列表，构造 courseId->name 映射，确保显示课程名称
+  LW.rest('api/course', {action:'list'}, function(courses){
+    var cmap={}; (courses||[]).forEach(function(c){ if(c && c.courseId){ cmap[c.courseId] = c.name || c.title || c.courseName; } });
+    LW.rest('api/student', {action:'grades'}, function(list){
+      var tb=$('#tbl-grade tbody'); tb.empty();
+      (list||[]).forEach(function(e){
+        var name = (e && (e.name || cmap[e.courseId] || e.title || e.courseName)) || e.courseId;
+        var score = (e && e.score!=null) ? e.score : '';
+        tb.append('<tr><td>'+name+'</td><td>'+score+'</td></tr>');
+      });
+    }, function(e,r){ showErrStudents(r); });
+  }, function(e,r){
+    // 课程列表失败时回退为直接渲染（仍尽量显示名称字段）
+    LW.rest('api/student', {action:'grades'}, function(list){
+      var tb=$('#tbl-grade tbody'); tb.empty();
+      (list||[]).forEach(function(e){
+        var name = e && (e.name || e.title || e.courseName || e.courseId);
+        var score = (e && e.score!=null) ? e.score : '';
+        tb.append('<tr><td>'+name+'</td><td>'+score+'</td></tr>');
+      });
+    }, function(e2,r2){ showErrStudents(r2); });
+  });
+}
+function loadRec(){ LW.rest('api/student', {action:'recommend'}, function(list){ var ul=$('#rec'); var empty=$('#rec-empty'); var raw=$('#rec-raw'); ul.empty(); if(!list || list.length===0){ empty.show(); raw.hide(); return; } empty.hide(); try{ raw.text('推荐原始数据:\n'+JSON.stringify(list,null,2)).show(); }catch(err){ raw.hide(); }
+  (list||[]).forEach(function(c){ var name=c && (c.name||c.title||c.courseName); var credit=(c && (c.credit||c.credits)); ul.append('<li>'+(name||'未知')+'('+(credit!=null?credit:'未识别')+'学分)</li>'); }); }, function(e,r){ showErrStudents(r); }); }
+$('#btn-export').on('click', function(){ LW.rest('api/student', {action:'grades_export'}, function(data){ $('#export-link').html('<a href="'+data.file+'" target="_blank">下载CSV</a>'); }, function(e,r){ showErrStudents(r); }); });
+$(function(){ loadCal(); loadGrades(); loadRec(); });
+</script>
+</body>
+</html>

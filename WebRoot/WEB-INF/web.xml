@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<web-app xmlns="http://xmlns.jcp.org/xml/ns/javaee" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://xmlns.jcp.org/xml/ns/javaee http://xmlns.jcp.org/xml/ns/javaee/web-app_3_1.xsd" version="3.1">
+  <display-name>training24-tomcat</display-name>
+
+  <servlet>
+    <servlet-name>UserServlet</servlet-name>
+    <servlet-class>com.training.web.UserServlet</servlet-class>
+  </servlet>
+  <servlet-mapping>
+    <servlet-name>UserServlet</servlet-name>
+    <url-pattern>/api/user</url-pattern>
+  </servlet-mapping>
+
+  <servlet>
+    <servlet-name>CourseServlet</servlet-name>
+    <servlet-class>com.training.web.CourseServlet</servlet-class>
+  </servlet>
+  <servlet-mapping>
+    <servlet-name>CourseServlet</servlet-name>
+    <url-pattern>/api/course</url-pattern>
+  </servlet-mapping>
+
+  <servlet>
+    <servlet-name>EnrollServlet</servlet-name>
+    <servlet-class>com.training.web.EnrollServlet</servlet-class>
+  </servlet>
+  <servlet-mapping>
+    <servlet-name>EnrollServlet</servlet-name>
+    <url-pattern>/api/enroll</url-pattern>
+  </servlet-mapping>
+
+  <servlet>
+    <servlet-name>StudentServlet</servlet-name>
+    <servlet-class>com.training.web.StudentServlet</servlet-class>
+  </servlet>
+  <servlet-mapping>
+    <servlet-name>StudentServlet</servlet-name>
+    <url-pattern>/api/student</url-pattern>
+  </servlet-mapping>
+
+  <servlet>
+    <servlet-name>AdminServlet</servlet-name>
+    <servlet-class>com.training.web.AdminServlet</servlet-class>
+  </servlet>
+  <servlet-mapping>
+    <servlet-name>AdminServlet</servlet-name>
+    <url-pattern>/api/admin</url-pattern>
+  </servlet-mapping>
+
+  <welcome-file-list>
+    <welcome-file>index.html</welcome-file>
+  </welcome-file-list>
+</web-app>

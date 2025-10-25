@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<title>管理员工具</title>
+<link rel="stylesheet" href="assets/style.css" />
+<script src="https://cdn.jsdelivr.net/npm/jquery@3.6.0/dist/jquery.min.js"></script>
+<script src="assets/lwquery.js"></script>
+</head>
+<body>
+<header>
+  <nav>
+    <a href="index.html">登录/注册</a>
+    <a href="courses.html">课程管理/查询</a>
+    <a href="enroll.html">选课</a>
+    <a href="students.html">学生视图</a>
+    <a href="admin.html">管理员</a>
+  </nav>
+</header>
+<main>
+  <div class="card">
+    <h3>统计报表</h3>
+    <div class="error" id="err-admin" style="display:none;color:#b00020;background:#ffecec;padding:6px;margin:6px 0;"></div>
+    <pre id="stats"></pre>
+  </div>
+  <div class="card">
+    <h3>日志查询</h3>
+    <ul id="logs"></ul>
+    <div class="pager" id="pager-logs" style="margin-top:8px;">
+      <button class="btn" id="pl-prev">上一页</button>
+      <span id="pl-info" style="margin:0 8px;">第 1 / 1 页，共 0 条</span>
+      <button class="btn" id="pl-next">下一页</button>
+      <span style="margin-left:12px;">每页</span>
+      <select id="pl-size">
+        <option>10</option>
+        <option selected>20</option>
+        <option>50</option>
+      </select>
+    </div>
+  </div>
+</main>
+<script>
+function showErrAdmin(msg){ var box=$('#err-admin'); box.text(msg).show(); setTimeout(function(){ box.fadeOut(200); }, 3000); }
+var logsAll=[], plPage=1, plSize=20;
+function renderLogsPage(){
+  var total=logsAll.length; var max=Math.max(1, Math.ceil(total/plSize));
+  plPage=Math.min(plPage, max);
+  var start=(plPage-1)*plSize; var items=logsAll.slice(start, start+plSize);
+  var ul=$('#logs'); ul.empty();
+  items.forEach(function(l){ ul.append('<li>'+l+'</li>'); });
+  $('#pl-info').text('第 '+plPage+' / '+max+' 页，共 '+total+' 条');
+}
+function requireAdmin(){
+  LW.rest('api/admin', {action:'stats'}, function(data){ $('#stats').text(JSON.stringify(data, null, 2)); }, function(e,r){ showErrAdmin(r); });
+  LW.rest('api/admin', {action:'logs_query'}, function(list){ logsAll=list||[]; plPage=1; renderLogsPage(); }, function(e,r){ showErrAdmin(r); });
+}
+$('#pl-prev').on('click', function(){ if(plPage>1){ plPage--; renderLogsPage(); } });
+$('#pl-next').on('click', function(){ var max=Math.max(1, Math.ceil(logsAll.length/plSize)); if(plPage<max){ plPage++; renderLogsPage(); } });
+$('#pl-size').on('change', function(){ plSize = Number($(this).val()); plPage = 1; renderLogsPage(); });
+$(function(){ requireAdmin(); });
+</script>
+</body>
+</html>
