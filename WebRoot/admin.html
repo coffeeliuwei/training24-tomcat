@@ -69,10 +69,12 @@ function showErrAdmin(msg){ var box=$('#err-admin'); box.text(msg).show(); setTi
 var logsAll=[], plPage=1, plSize=20;
 // 根据当前分页状态，将 logsAll 渲染到列表
 function renderLogsPage(){
-  var pg = LW.paginate(logsAll, plPage, plSize);
-  plPage = pg.pageNo;
-  LW.renderList('#logs', pg.items, function(l){ return '<li>'+l+'</li>'; });
-  $('#pl-info').text('第 '+plPage+' / '+pg.totalPages+' 页，共 '+pg.total+' 条');
+  var total=logsAll.length; var max=Math.max(1, Math.ceil(total/plSize));
+  plPage=Math.min(plPage, max);
+  var start=(plPage-1)*plSize; var items=logsAll.slice(start, start+plSize);
+  var ul=$('#logs'); ul.empty();
+  items.forEach(function(l){ ul.append('<li>'+l+'</li>'); });
+  $('#pl-info').text('第 '+plPage+' / '+max+' 页，共 '+total+' 条');
 }
 // 拉取统计与日志（调用后端 AdminServlet 对应接口），并进行初次渲染
 function requireAdmin(){
