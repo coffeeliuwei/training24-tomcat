@@ -2,7 +2,7 @@ package com.training.web;
 
 import lw.web.restful.SimpleRestful;
 import lw.web.lwWebException;
-import com.training.db.Db;
+import com.training.dao.DaoFactory;
 import com.training.db.Db.Enrollment;
 import com.training.db.Db.Course;
 import org.json.JSONObject;
@@ -26,18 +26,18 @@ public class EnrollServlet extends SimpleRestful {
             case "enroll":{
                 // 选课：返回 status=enrolled 或 waitlist 或 conflict
                 String courseId=jreq.getString("courseId");
-                Enrollment e=Db.enroll(uid, courseId);
+                Enrollment e=DaoFactory.enrollment().enroll(uid, courseId);
                 if(e==null) throw new lwWebException(404, "课程不存在");
                 return new JSONObject().put("status", e.status);
             }
             case "drop":{
                 // 退课：若课程有人候补，会自动将候补队列首位转为已选
-                String courseId=jreq.getString("courseId"); boolean ok=Db.drop(uid,courseId); return new JSONObject().put("ok", ok);
+                String courseId=jreq.getString("courseId"); boolean ok=DaoFactory.enrollment().drop(uid,courseId); return new JSONObject().put("ok", ok);
             }
             case "mylist":{
                 // 我的选课列表：显式构造成 JSON 数组，附带课程名称，避免前端再查
-                List<Enrollment> list=Db.listUserEnrollments(uid);
-                List<Course> all = Db.listCourses();
+                List<Enrollment> list=DaoFactory.enrollment().listUserEnrollments(uid);
+                List<Course> all = DaoFactory.course().listCourses();
                 JSONArray arr=new JSONArray();
                 for(Enrollment e: list){
                     JSONObject je=new JSONObject();

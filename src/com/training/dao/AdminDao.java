@@ -7,4 +7,5 @@ public interface AdminDao {
     Map<String,Object> stats();
     void log(String text);
     List<String> getLogs();
+    void seed();
 }

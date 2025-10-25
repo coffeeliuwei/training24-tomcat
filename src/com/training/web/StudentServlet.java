@@ -3,7 +3,7 @@ package com.training.web;
 import lw.web.restful.SimpleRestful;
 import lw.web.lwWebException;
 import lw.util.TextFile;
-import com.training.db.Db;
+import com.training.dao.DaoFactory;
 import com.training.db.Db.Course;
 import com.training.db.Db.Enrollment;
 import com.training.db.Db.TimeSlot;
@@ -46,16 +46,16 @@ public class StudentServlet extends SimpleRestful {
         String uid=(String)s.getAttribute("uid"); if(uid==null) throw new lwWebException(401, "未登录");
         String action=jreq!=null? jreq.optString("action", ""): "";
         switch(action){
-            case "calendar": return Db.calendar(uid); // 返回简化日历事件：title/day/start/end
+            case "calendar": return DaoFactory.enrollment().calendar(uid); // 返回简化日历事件：title/day/start/end
             case "grades": {
                 // 合并“我的选课”和“我的成绩”，即使未打分也返回课程名称，score 为空
-                java.util.List<Enrollment> ens = Db.listUserEnrollments(uid);
-                java.util.List<com.training.db.Db.Grade> grades = Db.getGrades(uid);
+                java.util.List<Enrollment> ens = DaoFactory.enrollment().listUserEnrollments(uid);
+                java.util.List<com.training.db.Db.Grade> grades = DaoFactory.grade().getGrades(uid);
                 java.util.Map<String, com.training.db.Db.Grade> gmap = new java.util.HashMap<>();
                 for(com.training.db.Db.Grade g: grades){ gmap.put(g.courseId, g); }
                 // 当前课程ID到名称的映射
                 java.util.Map<String,String> id2name = new java.util.HashMap<>();
-                for(Course c : Db.listCourses()){ id2name.put(c.id, c.name); }
+                for(Course c : DaoFactory.course().listCourses()){ id2name.put(c.id, c.name); }
                 // 组合所有课程ID（选课 + 已有成绩）
                 java.util.Set<String> ids = new java.util.HashSet<>();
                 for(Enrollment e: ens){ if("enrolled".equals(e.status)) ids.add(e.courseId); }
@@ -84,19 +84,19 @@ public class StudentServlet extends SimpleRestful {
                 }
                 String courseId = jreq.getString("courseId");
                 double score = jreq.getDouble("score");
-                Db.setGrade(targetUserId, courseId, score);
+                DaoFactory.grade().setGrade(targetUserId, courseId, score);
                 return new JSONObject().put("ok", true);
             }
             case "recommend":{
                 // 返回明确字段的推荐课程，避免前端出现 undefined
-                java.util.List<Course> list=Db.recommend(uid);
+                java.util.List<Course> list=DaoFactory.course().recommend(uid);
                 JSONArray arr=new JSONArray();
                 for(Course c: list){ arr.put(toJson(c)); }
                 return arr;
             }
             case "grades_export":{
                 // 将成绩导出为CSV文件，并返回下载路径
-                java.util.List<com.training.db.Db.Grade> list=Db.getGrades(uid);
+                java.util.List<com.training.db.Db.Grade> list=DaoFactory.grade().getGrades(uid);
                 StringBuilder sb=new StringBuilder(); sb.append("courseId,score\n");
                 for(com.training.db.Db.Grade g: list){ sb.append(g.courseId).append(",").append(g.score).append("\n"); }
                 String real=req.getServletContext().getRealPath("/exports");

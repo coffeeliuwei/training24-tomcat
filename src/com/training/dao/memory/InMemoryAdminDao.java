@@ -15,4 +15,7 @@ public class InMemoryAdminDao implements AdminDao {
     @Override public List<String> getLogs(){
         return Db.getLogs();
     }
+    @Override public void seed(){
+        Db.seed();
+    }
 }

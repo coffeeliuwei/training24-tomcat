@@ -2,7 +2,7 @@ package com.training.web;
 
 import lw.web.restful.SimpleRestful;
 import lw.web.lwWebException;
-import com.training.db.Db;
+import com.training.dao.DaoFactory;
 import com.training.db.Db.Course;
 import com.training.db.Db.TimeSlot;
 import org.json.JSONObject;
@@ -53,7 +53,7 @@ public class CourseServlet extends SimpleRestful {
                 JSONArray ts=jreq.getJSONArray("times");
                 List<TimeSlot> times=new ArrayList<>();
                 for(int i=0;i<ts.length();i++){ JSONObject t=ts.getJSONObject(i); TimeSlot slot=new TimeSlot(t.getString("day"), t.getInt("start"), t.getInt("end")); if(t.has("date")) slot.date=t.getString("date"); times.add(slot); }
-                Course c=Db.addCourse(name,credit,capacity,times);
+                Course c=DaoFactory.course().addCourse(name,credit,capacity,times);
                 return new JSONObject().put("id", c.id);
             }
             case "update":{
@@ -65,18 +65,18 @@ public class CourseServlet extends SimpleRestful {
                 Integer capacity=jreq.has("capacity")? jreq.getInt("capacity"): null;
                 List<TimeSlot> times=null;
                 if(jreq.has("times")){ JSONArray ts=jreq.getJSONArray("times"); times=new ArrayList<>(); for(int i=0;i<ts.length();i++){ JSONObject t=ts.getJSONObject(i); TimeSlot slot=new TimeSlot(t.getString("day"), t.getInt("start"), t.getInt("end")); if(t.has("date")) slot.date=t.getString("date"); times.add(slot); } }
-                boolean ok=Db.updateCourse(id,name,credit,capacity,times);
+                boolean ok=DaoFactory.course().updateCourse(id,name,credit,capacity,times);
                 if(!ok) throw new lwWebException(404, "课程不存在");
                 return new JSONObject().put("ok", true);
             }
             case "delete":{
                 // 仅管理员可删除课程
                 if(!"admin".equals(role)) throw new lwWebException(403, "仅管理员可删除课程");
-                String id=jreq.getString("id"); boolean ok=Db.deleteCourse(id); if(!ok) throw new lwWebException(404, "课程不存在"); return new JSONObject().put("ok", true);
+                String id=jreq.getString("id"); boolean ok=DaoFactory.course().deleteCourse(id); if(!ok) throw new lwWebException(404, "课程不存在"); return new JSONObject().put("ok", true);
             }
             case "list":{
                 // 列出所有课程（明确JSON字段，避免前端出现undefined）
-                List<Course> list=Db.listCourses();
+                List<Course> list=DaoFactory.course().listCourses();
                 JSONArray arr=new JSONArray();
                 for(Course c: list){ arr.put(toJson(c)); }
                 return arr;
@@ -86,7 +86,7 @@ public class CourseServlet extends SimpleRestful {
                 Integer min=jreq.has("minCredit")? jreq.getInt("minCredit"): null;
                 Integer max=jreq.has("maxCredit")? jreq.getInt("maxCredit"): null;
                 String day=jreq.optString("day", null);
-                List<Course> list=Db.filterCourses(min,max,day);
+                List<Course> list=DaoFactory.course().filterCourses(min,max,day);
                 JSONArray arr=new JSONArray();
                 for(Course c: list){ arr.put(toJson(c)); }
                 return arr;

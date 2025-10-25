@@ -2,7 +2,7 @@ package com.training.web;
 
 import lw.web.restful.SimpleRestful;
 import lw.web.lwWebException;
-import com.training.db.Db;
+import com.training.dao.DaoFactory;
 import org.json.JSONObject;
 
 import javax.servlet.http.HttpServletRequest;
@@ -18,8 +18,8 @@ public class AdminServlet extends SimpleRestful {
         String role=(String)s.getAttribute("role"); if(!"admin".equals(role)) throw new lwWebException(403, "需要管理员权限");
         String action=jreq!=null? jreq.optString("action", ""): "";
         switch(action){
-            case "stats": return Db.stats();   // 返回用户数量、课程数量、选课总数
-            case "logs_query": return Db.getLogs(); // 返回系统操作日志（简单字符串列表）
+            case "stats": return DaoFactory.admin().stats();   // 返回用户数量、课程数量、选课总数
+            case "logs_query": return DaoFactory.admin().getLogs(); // 返回系统操作日志（简单字符串列表）
             default: throw new lwWebException(400, "未知action:"+action);
         }
     }

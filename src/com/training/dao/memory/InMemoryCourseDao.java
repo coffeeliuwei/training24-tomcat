@@ -22,4 +22,7 @@ public class InMemoryCourseDao implements CourseDao {
     @Override public List<Course> filterCourses(Integer minCredit, Integer maxCredit, String day){
         return Db.filterCourses(minCredit, maxCredit, day);
     }
+    @Override public List<Course> recommend(String userId){
+        return Db.recommend(userId);
+    }
 }

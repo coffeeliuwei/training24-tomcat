@@ -10,4 +10,5 @@ public interface CourseDao {
     boolean deleteCourse(String id);
     List<Course> listCourses();
     List<Course> filterCourses(Integer minCredit, Integer maxCredit, String day);
+    List<Course> recommend(String userId);
 }
