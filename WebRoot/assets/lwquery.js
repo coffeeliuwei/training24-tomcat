@@ -742,3 +742,113 @@ LW.popup = function ( settings )
 		fadeOut(popup); 
 	});					
 }
+
+
+/* 通用渲染与分页工具
+ * 目标：将各页面的列表/表格渲染与分页逻辑抽象，统一在 LW 下复用。
+ * 不改变现有页面行为；提供轻量 API，便于后续逐步迁移。
+ *
+ * 核心函数：
+ * - LW.paginate(list, pageNo, pageSize) -> {items,pageNo,pageSize,total,totalPages}
+ * - LW.renderTable(table, rows, columns)
+ * - LW.renderList(list, items, renderItem)
+ * - LW.attachPager(container, state, onChange)
+ * - LW.renderPagerTable(opts)
+ */
+LW.paginate = function(list, pageNo, pageSize){
+	pageNo = Number(pageNo)||1; pageSize = Number(pageSize)||10;
+	var arr = Array.isArray(list)? list.slice() : [];
+	var total = arr.length;
+	var totalPages = Math.max(1, Math.ceil(total / pageSize));
+	if(pageNo < 1) pageNo = 1;
+	if(pageNo > totalPages) pageNo = totalPages;
+	var start = (pageNo - 1) * pageSize;
+	var items = arr.slice(start, start + pageSize);
+	return { items: items, pageNo: pageNo, pageSize: pageSize, total: total, totalPages: totalPages };
+};
+
+// 渲染表格：columns 形如 [{key:'name', title:'课程', formatter:(row,val)=>...}, ...]
+LW.renderTable = function(table, rows, columns){
+	var $t = LW$(table);
+	var thead = $('thead', $t);
+	var tbody = $('tbody', $t);
+	if(thead.length === 0){ $t.prepend('<thead></thead>'); thead = $('thead',$t); }
+	if(tbody.length === 0){ $t.append('<tbody></tbody>'); tbody = $('tbody',$t); }
+	if(Array.isArray(columns) && columns.length > 0){
+		var headerHtml = '<tr>' + columns.map(function(c){ return '<th>' + (c.title || c.key || '') + '</th>'; }).join('') + '</tr>';
+		thead.html(headerHtml);
+	}
+	tbody.empty();
+	(rows || []).forEach(function(row){
+		var tds = (columns || []).map(function(c){
+			var v = row[c.key];
+			if(typeof c.formatter === 'function'){ v = c.formatter(row, v); }
+			if(v == null) v = '';
+			return '<td>' + v + '</td>';
+		}).join('');
+		tbody.append('<tr>' + tds + '</tr>');
+	});
+	return $t;
+};
+
+// 渲染列表：renderItem(it, idx) 返回 HTML 字符串或 jQuery
+LW.renderList = function(list, items, renderItem){
+	var $ul = LW$(list);
+	$ul.empty();
+	(items || []).forEach(function(it, idx){
+		var html = typeof renderItem === 'function' ? renderItem(it, idx) : ('<li>' + (it==null? '' : it) + '</li>');
+		$ul.append(html);
+	});
+	return $ul;
+};
+
+// 简易分页器：在容器内生成 上一页/下一页 + 信息；回调 onChange(state)
+LW.attachPager = function(container, state, onChange){
+	var $c = LW$(container);
+	var s = state || { pageNo:1, pageSize:10, total:0, totalPages:1 };
+	var html = '<div class="lw-pager">' +
+		'<button class="lw-prev">上一页</button>' +
+		'<span class="lw-info">第 '+ s.pageNo +' / '+ s.totalPages +' 页，共 '+ s.total +' 条</span>' +
+		'<button class="lw-next">下一页</button>' +
+		'</div>';
+	$c.html(html);
+	function refresh(){
+		$('.lw-info', $c).text('第 '+ s.pageNo +' / '+ s.totalPages +' 页，共 '+ s.total +' 条');
+		$('.lw-prev', $c).prop('disabled', s.pageNo <= 1);
+		$('.lw-next', $c).prop('disabled', s.pageNo >= s.totalPages);
+	}
+	$('.lw-prev', $c).off('click').on('click', function(){
+		if(s.pageNo > 1){ s.pageNo--; refresh(); if(typeof onChange === 'function') onChange(s); }
+	});
+	$('.lw-next', $c).off('click').on('click', function(){
+		if(s.pageNo < s.totalPages){ s.pageNo++; refresh(); if(typeof onChange === 'function') onChange(s); }
+	});
+	refresh();
+	return { refresh: refresh, state: s };
+};
+
+/* 组合：查询 + 客户端分页 + 表格渲染
+ * opts: {
+ *   table: '#tbl',          // 表格选择器
+ *   pager: '#pager',        // 分页容器选择器（可选）
+ *   queryFn: function(ok, err){ ... }, // 拉取完整列表（或已分页）
+ *   pageSize: 10,           // 每页大小
+ *   columns: [ ... ],       // 表格列定义
+ *   transform: function(list){ return list; } // 可选，对数据做适配
+ * }
+ */
+LW.renderPagerTable = function(opts){
+	var pageSize = Number(opts.pageSize)||10;
+	var state = { pageNo: 1, pageSize: pageSize, total: 0, totalPages: 1 };
+	function load(){
+		opts.queryFn(function(list){
+			var data = (typeof opts.transform==='function') ? opts.transform(list) : list;
+			var pg = LW.paginate(data, state.pageNo, state.pageSize);
+			state.total = pg.total; state.totalPages = pg.totalPages; state.pageNo = pg.pageNo;
+			LW.renderTable(opts.table, pg.items, opts.columns);
+			if(opts.pager) LW.attachPager(opts.pager, state, function(s){ state = s; load(); });
+		}, function(e, r){ LW.log('renderPagerTable error: '+ r); });
+	}
+	load();
+	return { reload: load, state: state };
+};
