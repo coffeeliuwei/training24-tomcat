@@ -15,8 +15,24 @@ import java.util.*;
 
 // 课程管理接口：管理员发布/修改/删除课程，学生可查询与筛选课程
 // 时间段采用 day/start/end 三要素，支持冲突检测（在选课逻辑中）
+/**
+ * 课程管理接口 Servlet
+ * - 职责：课程创建/更新/删除、查询与过滤
+ * - 支持 action：
+ *   - create：管理员发布课程
+ *   - update：管理员修改课程（支持部分字段）
+ *   - delete：管理员删除课程
+ *   - list：列出所有课程（明确 JSON 字段）
+ *   - filter：按学分区间与星期过滤
+ * - 会话与权限：仅管理员可进行 create/update/delete；查询无需登录
+ * - 依赖：通过 `DaoFactory.course()` 访问数据层；时间段 `TimeSlot(day,start,end,date?)`
+ */
 public class CourseServlet extends SimpleRestful {
     // 将课程对象转换为明确的JSON结构，避免默认反射序列化遗漏字段
+    /** 将课程对象转换为明确 JSON 结构
+     * @param c 课程对象
+     * @return 包含 id/name/credit/capacity/enrolled/times 的 JSON
+     */
     private JSONObject toJson(Course c){
         JSONObject j=new JSONObject();
         j.put("id", c.id);
@@ -38,6 +54,20 @@ public class CourseServlet extends SimpleRestful {
     }
 
     @Override
+    /** 处理课程管理请求
+     * 支持 action：
+     * - create：发布课程（管理员）
+     * - update：修改课程（管理员）
+     * - delete：删除课程（管理员）
+     * - list：列出所有课程（明确字段）
+     * - filter：按学分/星期过滤（明确字段）
+     * 权限：create/update/delete 需管理员；查询无需登录
+     * @param req HTTP 请求
+     * @param resp HTTP 响应
+     * @param jreq 请求体 JSON（含 action）
+     * @return 根据 action 返回 JSON/数组
+     * @throws lwWebException 缺少参数/无权限/不存在
+     */
     protected Object execute(HttpServletRequest req, HttpServletResponse resp, JSONObject jreq) throws Exception {
         String action=jreq!=null? jreq.optString("action", ""): "";
         if(action==null || action.isEmpty()) throw new lwWebException(400, "缺少action");

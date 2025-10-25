@@ -18,8 +18,22 @@ import java.util.*;
 
 // 学生视图接口：课表、成绩、课程推荐、成绩导出
 // 导出成绩为CSV到 WebRoot/exports 目录，前端可直接下载
+/**
+ * 学生端综合接口 Servlet
+ * - 职责：课表查询、成绩查询、成绩导出
+ * - 支持 action：
+ *   - schedule：我的课表
+ *   - grades_query：查询成绩列表
+ *   - grades_export：导出成绩为 CSV
+ * - 会话与权限：需登录并从 Session 读取 `uid`
+ * - 依赖：通过 `DaoFactory.grade()`、`DaoFactory.enrollment()`、`DaoFactory.course()` 访问数据层
+ */
 public class StudentServlet extends SimpleRestful {
-    // 将课程对象转换为明确JSON结构，避免默认反射序列化导致字段缺失
+    // 将课程对象转换为明确 JSON 结构
+    /** 将课程对象转换为明确 JSON 结构
+     * @param c 课程对象
+     * @return 包含 id/name/credit/capacity/enrolled/times 的 JSON
+     */
     private JSONObject toJson(Course c){
         JSONObject j=new JSONObject();
         j.put("id", c.id);
@@ -41,6 +55,20 @@ public class StudentServlet extends SimpleRestful {
     }
 
     @Override
+    /** 处理学生端请求
+     * 支持 action：
+     * - calendar：返回我的课表事件（title/day/start/end）
+     * - grades：查询成绩列表（含未评分返回 null）
+     * - set_grade：设定成绩（仅管理员可为他人设定）
+     * - recommend：课程推荐（明确字段）
+     * - grades_export：导出成绩为 CSV 文件
+     * 会话：需登录（从 Session 读取 uid/role）
+     * @param req HTTP 请求
+     * @param resp HTTP 响应
+     * @param jreq 请求体 JSON（含 action）
+     * @return 根据 action 返回 JSON/数组/Map
+     * @throws lwWebException 未登录/无权限/参数错误
+     */
     protected Object execute(HttpServletRequest req, HttpServletResponse resp, JSONObject jreq) throws Exception {
         HttpSession s=req.getSession(false); if(s==null) throw new lwWebException(401, "未登录");
         String uid=(String)s.getAttribute("uid"); if(uid==null) throw new lwWebException(401, "未登录");
