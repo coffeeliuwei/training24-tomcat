@@ -1,14 +1,25 @@
 <!DOCTYPE html>
+<!-- 初学者说明：学生选课页面，展示课程列表与“我的选课”。
+- 依赖接口：
+  - 课程：CourseServlet（`api/course`）`action=list|filter`
+  - 选课：EnrollServlet（`api/enroll`）`action=enroll|drop|mylist`
+  - 学生：StudentServlet（`api/student`）`action=calendar`（辅助显示课程名）
+  - 管理员检测：AdminServlet（`api/admin`）`action=stats`（成功则视为管理员）
+- 页面结构：导航 → 课程列表（分页）→ 我的选课（含退课按钮）→ 脚本逻辑
+- 学习建议：先看 table/pager 的 HTML 结构，再读下方脚本中数据加载与渲染链路（detectAdmin → list → mylist → calendar）。
+-->
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8" />
 <title>学生选课</title>
+<!-- 资源引入：样式 + jQuery + LW 封装（LW.rest，统一调用后端） -->
 <link rel="stylesheet" href="assets/style.css" />
 <script src="https://cdn.jsdelivr.net/npm/jquery@3.6.0/dist/jquery.min.js"></script>
 <script src="assets/lwquery.js"></script>
 </head>
 <body>
 <header>
+  <!-- 顶部导航：不同角色均可访问此页，但管理员会看到“已选”列显示总人数 -->
   <nav>
     <a href="index.html">登录/注册</a>
     <a href="courses.html">课程管理/查询</a>
@@ -18,6 +29,7 @@
   </nav>
 </header>
 <main>
+  <!-- 课程列表：从 `api/course?action=list` 获取并分页展示；每行包含选课按钮 -->
   <div class="card">
     <h3>课程列表</h3>
     <div class="error" id="err-enroll" style="display:none;color:#b00020;background:#ffecec;padding:6px;margin:6px 0;"></div>
@@ -37,6 +49,7 @@
       </select>
     </div>
   </div>
+  <!-- 我的选课：展示已选课程；提供退课按钮；并展示原始数据便于调试/学习 -->
   <div class="card">
     <h3>我的选课</h3>
     <ul id="mylist"></ul>
@@ -44,13 +57,30 @@
   </div>
 </main>
 <script>
+/* 脚本总览：
+- showErrEnroll：统一错误提示（顶部红框，自动隐藏）
+- enrollAll/pePage/peSize：课程列表数据与分页状态
+- isAdmin/myStatusByCourseId：角色与“我对每门课的选课状态”缓存
+- refreshCourses：从后端拉取课程列表并渲染
+- renderRow：渲染表格的一行；管理员显示总已选人数，学生显示本人是否已选
+- renderEnrollPage：根据分页状态渲染当前页课程
+- extractCourseId/extractStatus：从后端返回的对象/字符串中稳健提取课程ID与状态（适配不同序列化格式）
+- loadMine：先加载我的选课，再并行拉取课程列表与学生日历，用于补全课程名与状态；同时渲染退课按钮
+- detectAdmin：尝试调用管理员接口，成功则视为管理员（影响“已选”列的含义）
+- 分页事件：上一页/下一页/每页大小改变
+- 页面加载：优先检测管理员 → 拉取课程 → 加载我的选课
+*/
+// 统一错误提示框（3秒自动隐藏）
 function showErrEnroll(msg){ var box=$('#err-enroll'); box.text(msg).show(); setTimeout(function(){ box.fadeOut(200); }, 3000); }
+// 课程数据与分页状态；isAdmin 表示当前是否管理员；myStatus 缓存本人对每门课的状态
 var enrollAll=[], pePage=1, peSize=10;
 // 新增：管理员与我的选课状态缓存
 var isAdmin=false; var myStatusByCourseId={};
+// 拉取课程列表并渲染（keepPage=true 保持当前页不重置）
 function refreshCourses(keepPage){
   LW.rest('api/course', {action:'list'}, function(items){ enrollAll=items||[]; if(!keepPage){ pePage=1; } renderEnrollPage(); }, function(e,r){ showErrEnroll(r); });
 }
+// 渲染表格行（含选课按钮）；管理员显示总已选人数；学生显示本人是否已选
 function renderRow(c){
   var times=(c.times||[]).map(t=>t.day+" "+t.start+"-"+t.end).join('; ');
   var tr=$('<tr/>' );
@@ -78,6 +108,7 @@ function renderRow(c){
   tr.append(td);
   return tr;
 }
+// 根据分页状态渲染当前页
 function renderEnrollPage(){
   var total=enrollAll.length; var max=Math.max(1, Math.ceil(total/peSize));
   pePage=Math.min(pePage, max);
@@ -86,7 +117,9 @@ function renderEnrollPage(){
   items.forEach(function(c){ tbody.append( renderRow(c) ); });
   $('#pe-info').text('第 '+pePage+' / '+max+' 页，共 '+total+' 条');
 }
+// 统一入口：渲染课程列表（供 list/filter 回调使用）
 function renderCourses(items){ enrollAll = items || []; pePage = 1; renderEnrollPage(); }
+// 从多种格式中提取课程ID（字符串/对象的不同字段名）
 function extractCourseId(e){
   if(!e) return undefined;
   if(typeof e==='string'){
@@ -102,6 +135,7 @@ function extractCourseId(e){
   for(var i=0;i<keys.length;i++){ var k=keys[i]; if(/courseid|course_id/i.test(k)) return e[k]; }
   return undefined;
 }
+// 从多种格式中提取状态（字符串中解析或对象字段）
 function extractStatus(e){
   if(!e) return undefined;
   if(typeof e==='string'){
@@ -111,6 +145,7 @@ function extractStatus(e){
   }
   return e.status || e.state || e.result || undefined;
 }
+// 加载“我的选课”，并补全名称与状态（必要时用课表事件回填）
 function loadMine(){
   LW.rest('api/enroll', {action:'mylist'}, function(list){
     // 缓存我的选课状态
@@ -153,11 +188,13 @@ function loadMine(){
     }, function(e1,r1){ showErrEnroll(r1); });
   }, function(e,r){ showErrEnroll(r); });
 }
+// 分页按钮与每页大小事件绑定
 $('#pe-prev').on('click', function(){ if(pePage>1){ pePage--; renderEnrollPage(); } });
 $('#pe-next').on('click', function(){ var max=Math.max(1, Math.ceil(enrollAll.length/peSize)); if(pePage<max){ pePage++; renderEnrollPage(); } });
 $('#pe-size').on('change', function(){ peSize = Number($(this).val()); pePage = 1; renderEnrollPage(); });
-// 新增：探测是否管理员（管理员显示总已选人数）
+// 探测是否管理员（管理员显示总已选人数）
 function detectAdmin(cb){ LW.rest('api/admin', {action:'stats'}, function(data){ isAdmin=true; if(typeof cb==='function') cb(); }, function(){ isAdmin=false; if(typeof cb==='function') cb(); }); }
+// 文档就绪：先检测管理员，再加载课程与我的选课
 $(function(){ detectAdmin(function(){ renderEnrollPage(); }); LW.rest('api/course', {action:'list'}, renderCourses, function(e,r){ showErrEnroll(r); }); loadMine(); });
 </script>
 </body>

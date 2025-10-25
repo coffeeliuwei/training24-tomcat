@@ -1,14 +1,25 @@
 <!DOCTYPE html>
+<!-- 初学者说明：课程管理与查询页面（仅管理员）。
+- 依赖接口：CourseServlet（前端使用 `api/course` 路径）
+  - `action=create` 发布课程（含时间段）
+  - `action=list` 列出所有课程（分页渲染）
+  - `action=delete` 删除课程（后端已做级联清理选课与成绩）
+  - `action=filter` 组合筛选（最小学分/最大学分/星期）
+- 页面结构：导航 → 管理员提示 → 发布课程表单 → 查询与表格 → 分页控件 → 脚本
+- 学习建议：先理解发布课程的时间段输入，再看脚本中 timesSegs 的构造与渲染。
+-->
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8" />
 <title>课程管理与查询</title>
+<!-- 资源引入：样式 + jQuery + LW 封装（统一调用后端 REST） -->
 <link rel="stylesheet" href="assets/style.css" />
 <script src="https://cdn.jsdelivr.net/npm/jquery@3.6.0/dist/jquery.min.js"></script>
 <script src="assets/lwquery.js"></script>
 </head>
 <body>
 <header>
+  <!-- 顶部导航：本页为管理员视角；学生请前往“选课”页面 -->
   <nav>
     <a href="index.html">登录/注册</a>
     <a href="courses.html">课程管理/查询</a>
@@ -18,9 +29,11 @@
   </nav>
 </header>
 <div id="admin-block" class="error" style="display:none;color:#b00020;background:#ffecec;padding:8px;margin:8px;">
+  <!-- 管理员权限提示：若接口鉴权失败，将显示此提示并跳转到选课页面 -->
   该页面仅管理员可用，学生请使用“选课”页面。 <a href="enroll.html">前往选课</a>
 </div>
 <main>
+  <!-- 发布课程：填写课程名/学分/上限与时间段，点击“发布课程”调用后端 create -->
   <div class="card">
     <h3>管理员发布课程</h3>
     <div class="form-row"><input id="c-name" placeholder="课程名称" /></div>
@@ -37,6 +50,7 @@
     <button class="btn" id="btn-c-create">发布课程</button>
   </div>
 
+  <!-- 课程查询：支持最小学分/最大学分/星期过滤；点击“全部课程”重置列表 -->
   <div class="card">
     <h3>课程查询</h3>
     <div class="form-row">
@@ -65,36 +79,48 @@
   </div>
 </main>
 <script>
+/* 脚本总览：
+- parseTimes：将输入的文本（例如 "Mon,9,11; Tue,14,16"）解析为时间段数组
+- timesSegs/refreshTimesList：缓存已添加的时间段，并在页面显示（date 存在时用指定日期，否则按 day 推导最近日期）
+- renderRow/renderCoursesPage：渲染课程表格与分页
+- 事件绑定：添加时间段、发布课程、分页按钮、筛选/全部课程
+- guardAdmin：检查是否管理员（调用 `api/admin?action=stats`），非管理员跳转到选课页
+*/
 function parseTimes(txt){
   var arr=txt.split(';').filter(x=>x.trim().length>0);
   return arr.map(function(e){ var p=e.split(','); return {day:p[0], start:Number(p[1]), end:Number(p[2])}; });
 }
+// 错误提示（3秒自动隐藏）
 function showErrCourses(msg){ var box=$('#err-courses'); box.text(msg).show(); setTimeout(function(){ box.fadeOut(200); }, 3000); }
+// 课程数据与分页状态
 var coursesAll=[], pcPage=1, pcSize=10;
-// 新增：日期格式与星期推导
+// 日期格式化与星期推导（便于展示与存储）
 function formatDateCN(d){ if(!d) return ''; return d.replace(/\-/g,'/'); }
- function dayEnFromDate(dstr){ var d=new Date(dstr); var m=['Sun','Mon','Tue','Wed','Thu','Fri','Sat']; return m[d.getDay()]; }
- // 新增：将星期推导为最近一次的具体日期(YYYY/MM/DD)
- function toYYYYMMDD(date){ var y=date.getFullYear(); var m=(date.getMonth()+1).toString().padStart(2,'0'); var d=date.getDate().toString().padStart(2,'0'); return y+"/"+m+"/"+d; }
- function nextDateForDay(day){ var map={Sun:0,Mon:1,Tue:2,Wed:3,Thu:4,Fri:5,Sat:6}; var target=map[day]; if(target==null) return day; var now=new Date(); var diff=(target - now.getDay() + 7) % 7; var res=new Date(now.getFullYear(), now.getMonth(), now.getDate()+diff); return toYYYYMMDD(res); }
- var timesSegs=[];
- function refreshTimesList(){ var txt=timesSegs.map(function(t){ return (t.date? t.date: nextDateForDay(t.day))+" "+t.start+"-"+t.end; }).join('; '); $('#times-list').text(txt||'无'); }
- $('#btn-add-time').on('click', function(){ var d=$('#c-date').val(); var s=$('#c-start').val(); var e=$('#c-end').val(); var sN=Number(s), eN=Number(e); if(!d||!s||!e|| sN>=eN){ showErrCourses('请填写日期与开始/结束小时，且开始小于结束'); return; } var day=dayEnFromDate(d); var cn=formatDateCN(d); timesSegs.push({date:cn, day:day, start:sN, end:eN}); refreshTimesList(); });
- function renderRow(c){
-   var times=(c.times||[]).map(function(t){ var dateTxt = t.date? t.date: nextDateForDay(t.day); return dateTxt+" "+t.start+"-"+t.end; }).join('; ');
-   var tr=$('<tr/>');
-   tr.append('<td>'+c.name+'</td>');
-   tr.append('<td>'+c.credit+'</td>');
-   tr.append('<td>'+times+'</td>');
-   tr.append('<td>'+c.capacity+'</td>');
-   tr.append('<td>'+c.enrolled+'</td>');
-   var td=$('<td/>');
-   var btnDel=$('<button class="btn">删除</button>');
-   btnDel.on('click', function(){ LW.rest('api/course', {action:'delete', id:c.id}, function(){ alert('删除成功'); $('#btn-list').click(); }, function(e,r){ showErrCourses(r); }); });
-   td.append(btnDel);
-   tr.append(td);
-   return tr;
- }
+function dayEnFromDate(dstr){ var d=new Date(dstr); var m=['Sun','Mon','Tue','Wed','Thu','Fri','Sat']; return m[d.getDay()]; }
+function toYYYYMMDD(date){ var y=date.getFullYear(); var m=(date.getMonth()+1).toString().padStart(2,'0'); var d=date.getDate().toString().padStart(2,'0'); return y+"/"+m+"/"+d; }
+function nextDateForDay(day){ var map={Sun:0,Mon:1,Tue:2,Wed:3,Thu:4,Fri:5,Sat:6}; var target=map[day]; if(target==null) return day; var now=new Date(); var diff=(target - now.getDay() + 7) % 7; var res=new Date(now.getFullYear(), now.getMonth(), now.getDate()+diff); return toYYYYMMDD(res); }
+// 已添加的时间段缓存与在页面上的文字展示
+var timesSegs=[];
+function refreshTimesList(){ var txt=timesSegs.map(function(t){ return (t.date? t.date: nextDateForDay(t.day))+" "+t.start+"-"+t.end; }).join('; '); $('#times-list').text(txt||'无'); }
+// 添加时间段按钮：校验输入并追加到 timesSegs
+$('#btn-add-time').on('click', function(){ var d=$('#c-date').val(); var s=$('#c-start').val(); var e=$('#c-end').val(); var sN=Number(s), eN=Number(e); if(!d||!s||!e|| sN>=eN){ showErrCourses('请填写日期与开始/结束小时，且开始小于结束'); return; } var day=dayEnFromDate(d); var cn=formatDateCN(d); timesSegs.push({date:cn, day:day, start:sN, end:eN}); refreshTimesList(); });
+// 渲染表格一行
+function renderRow(c){
+  var times=(c.times||[]).map(function(t){ var dateTxt = t.date? t.date: nextDateForDay(t.day); return dateTxt+" "+t.start+"-"+t.end; }).join('; ');
+  var tr=$('<tr/>');
+  tr.append('<td>'+c.name+'</td>');
+  tr.append('<td>'+c.credit+'</td>');
+  tr.append('<td>'+times+'</td>');
+  tr.append('<td>'+c.capacity+'</td>');
+  tr.append('<td>'+c.enrolled+'</td>');
+  var td=$('<td/>');
+  var btnDel=$('<button class="btn">删除</button>');
+  btnDel.on('click', function(){ LW.rest('api/course', {action:'delete', id:c.id}, function(){ alert('删除成功'); $('#btn-list').click(); }, function(e,r){ showErrCourses(r); }); });
+  td.append(btnDel);
+  tr.append(td);
+  return tr;
+}
+// 渲染分页
 function renderCoursesPage(){
   var total=coursesAll.length; var max=Math.max(1, Math.ceil(total/pcSize));
   pcPage=Math.min(pcPage, max);
@@ -103,17 +129,22 @@ function renderCoursesPage(){
   items.forEach(function(c){ tbody.append( renderRow(c) ); });
   $('#pc-info').text('第 '+pcPage+' / '+max+' 页，共 '+total+' 条');
 }
+// 统一入口：渲染课程列表
 function renderCourses(items){ coursesAll = items || []; pcPage = 1; renderCoursesPage(); }
+// 分页控件与按钮事件
 $('#pc-prev').on('click', function(){ if(pcPage>1){ pcPage--; renderCoursesPage(); } });
 $('#pc-next').on('click', function(){ var max=Math.max(1, Math.ceil(coursesAll.length/pcSize)); if(pcPage<max){ pcPage++; renderCoursesPage(); } });
 $('#pc-size').on('change', function(){ pcSize = Number($(this).val()); pcPage = 1; renderCoursesPage(); });
+// 发布课程：收集填写的字段并调用后端 create
 $('#btn-c-create').on('click', function(){
   var name=$('#c-name').val().trim(); var credit=Number($('#c-credit').val()); var cap=Number($('#c-cap').val()); var times=timesSegs.slice();
   if(name.length<2||credit<=0||cap<=0||times.length==0){ showErrCourses('请填写完整'); return; }
   LW.rest('api/course', {action:'create', name:name, credit:credit, capacity:cap, times:times}, function(){ alert('发布成功'); timesSegs=[]; refreshTimesList(); $('#btn-list').click(); }, function(e,r){ showErrCourses(r); });
 });
+// 列表与筛选
 $('#btn-list').on('click', function(){ LW.rest('api/course', {action:'list'}, renderCourses, function(e,r){ showErrCourses(r); }); });
 $('#btn-filter').on('click', function(){ var min=$('#f-min').val()?Number($('#f-min').val()):undefined; var max=$('#f-max').val()?Number($('#f-max').val()):undefined; var day=$('#f-day').val().trim(); if(day.length==0) day=undefined; LW.rest('api/course', {action:'filter', minCredit:min, maxCredit:max, day:day}, renderCourses, function(e,r){ showErrCourses(r); }); });
+// 管理员鉴权：失败则隐藏 main 并提示，随后跳转选课页面
 function guardAdmin(){
   LW.rest('api/admin', {action:'stats'}, function(){
     $('#admin-block').hide();
@@ -124,6 +155,7 @@ function guardAdmin(){
     setTimeout(function(){ window.location.href='enroll.html'; }, 800);
   });
 }
+// 页面加载：先鉴权，再加载课程列表
 $(function(){ guardAdmin(); });
 </script>
 </body>

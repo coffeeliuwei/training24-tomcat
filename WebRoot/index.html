@@ -1,14 +1,25 @@
 <!DOCTYPE html>
+<!-- 初学者说明：登录/注册/密码重置与退出登录页面。
+- 依赖接口：UserServlet（前端使用 `api/user` 路径）
+  - `action=login` 登录返回当前用户信息（含角色）
+  - `action=register` 注册新用户
+  - `action=reset` 重置密码（示例为直接重置）
+  - `action=logout` 退出登录
+- 页面结构：导航 → 三个卡片（登录/注册/重置）→ 退出按钮与当前用户信息 → 脚本事件绑定
+- 学习建议：先看各输入框 id 与按钮 id，再看下方脚本如何收集输入并调用 LW.rest。
+-->
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8" />
 <title>选课系统 - 登录</title>
+<!-- 资源引入：样式 + jQuery + LW 封装（统一调用后端） -->
 <link rel="stylesheet" href="assets/style.css" />
 <script src="https://cdn.jsdelivr.net/npm/jquery@3.6.0/dist/jquery.min.js"></script>
 <script src="assets/lwquery.js"></script>
 </head>
 <body>
 <header>
+  <!-- 顶部导航：从登录入口可跳转到各模块页面 -->
   <nav>
     <a href="index.html">登录/注册</a>
     <a href="courses.html">课程管理/查询</a>
@@ -43,16 +54,26 @@
   </div>
 </main>
 <script>
+/* 脚本总览：
+- setUserInfo：在页面右侧显示当前登录用户信息
+- 登录按钮：收集用户名/密码 → 调用 `api/user?action=login` → 成功后显示用户信息
+- 注册按钮：校验长度 → 调用 `api/user?action=register`
+- 重置按钮：校验新密码长度 → 调用 `api/user?action=reset`
+- 退出按钮：调用 `api/user?action=logout` 并清空用户信息
+- 提示策略：使用 alert 简单提示结果；可升级为统一样式提示框
+*/
 function setUserInfo(u){
   if(u){ $('#user-info').text('当前用户: '+u.username+'('+u.role+')'); }
   else { $('#user-info').text('未登录'); }
 }
+// 登录按钮事件：发送用户名与密码到后端
 $('#btn-login').on('click', function(){
   var u=$('#login-username').val().trim();
   var p=$('#login-password').val().trim();
   if(u.length<3||p.length<1){ alert('请输入有效的用户名和密码'); return; }
   LW.rest('api/user', {action:'login', username:u, password:p}, function(data){ setUserInfo(data); alert('登录成功'); }, function(e,r){ alert('登录失败：'+r); });
 });
+// 注册按钮事件：最少长度校验后调用后端
 $('#btn-register').on('click', function(){
   var u=$('#reg-username').val().trim();
   var p=$('#reg-password').val().trim();
@@ -60,11 +81,13 @@ $('#btn-register').on('click', function(){
   if(u.length<3||p.length<6){ alert('用户名至少3位，密码至少6位'); return; }
   LW.rest('api/user', {action:'register', username:u, password:p, email:e}, function(data){ alert('注册成功，请登录'); }, function(err,reason){ alert('注册失败：'+reason); });
 });
+// 重置密码事件：校验后调用后端
 $('#btn-reset').on('click', function(){
   var u=$('#reset-username').val().trim(); var n=$('#reset-newpwd').val().trim();
   if(n.length<6){ alert('新密码至少6位'); return; }
   LW.rest('api/user', {action:'reset', username:u, newPwd:n}, function(){ alert('重置成功'); }, function(e,r){ alert('重置失败：'+r); });
 });
+// 退出登录事件：清空用户信息
 $('#btn-logout').on('click', function(){ LW.rest('api/user', {action:'logout'}, function(){ setUserInfo(null); alert('已退出'); }, function(e,r){ alert('退出失败：'+r); }); });
 </script>
 </body>
