@@ -61,13 +61,16 @@ function showErrStudents(msg){ var box=$('#err-students'); box.text(msg).show();
 // 加载课表并合并显示
 function loadCal(){
   LW.rest('api/student', {action:'calendar'}, function(list){
-    var tb=$('#tbl-cal tbody'); tb.empty();
-    // 将同一课程的多个时间段合并为一行，避免重复
     var byTitle={}; (list||[]).forEach(function(e){ (byTitle[e.title]||(byTitle[e.title]=[])).push(e); });
-    Object.keys(byTitle).forEach(function(title){
+    var rows = Object.keys(byTitle).map(function(title){
       var times=byTitle[title].map(function(ev){ return ev.day+' '+ev.start+'-'+ev.end; }).join('; ');
-      var tr=$('<tr/>'); tr.append('<td>'+title+'</td>'); tr.append('<td>'+times+'</td>'); tb.append(tr);
+      return { title:title, times:times };
     });
+    var columns = [
+      {key:'title', title:'课程'},
+      {key:'times', title:'时间'}
+    ];
+    LW.renderTable('#tbl-cal', rows, columns);
   }, function(e,r){ showErrStudents(r); });
 }
 // 加载成绩（优先用课程列表补全名称）
@@ -76,28 +79,33 @@ function loadGrades(){
   LW.rest('api/course', {action:'list'}, function(courses){
     var cmap={}; (courses||[]).forEach(function(c){ if(c && c.courseId){ cmap[c.courseId] = c.name || c.title || c.courseName; } });
     LW.rest('api/student', {action:'grades'}, function(list){
-      var tb=$('#tbl-grade tbody'); tb.empty();
-      (list||[]).forEach(function(e){
+      var rows = (list||[]).map(function(e){
         var name = (e && (e.name || cmap[e.courseId] || e.title || e.courseName)) || e.courseId;
         var score = (e && e.score!=null) ? e.score : '';
-        tb.append('<tr><td>'+name+'</td><td>'+score+'</td></tr>');
+        return { name:name, score:score };
       });
+      LW.renderTable('#tbl-grade', rows, [
+        {key:'name', title:'课程名称'},
+        {key:'score', title:'成绩'}
+      ]);
     }, function(e,r){ showErrStudents(r); });
   }, function(e,r){
-    // 课程列表失败时回退为直接渲染（仍尽量显示名称字段）
     LW.rest('api/student', {action:'grades'}, function(list){
-      var tb=$('#tbl-grade tbody'); tb.empty();
-      (list||[]).forEach(function(e){
+      var rows = (list||[]).map(function(e){
         var name = e && (e.name || e.title || e.courseName || e.courseId);
         var score = (e && e.score!=null) ? e.score : '';
-        tb.append('<tr><td>'+name+'</td><td>'+score+'</td></tr>');
+        return { name:name, score:score };
       });
+      LW.renderTable('#tbl-grade', rows, [
+        {key:'name', title:'课程名称'},
+        {key:'score', title:'成绩'}
+      ]);
     }, function(e2,r2){ showErrStudents(r2); });
   });
 }
 // 加载推荐并展示原始数据（便于学习）
-function loadRec(){ LW.rest('api/student', {action:'recommend'}, function(list){ var ul=$('#rec'); var empty=$('#rec-empty'); var raw=$('#rec-raw'); ul.empty(); if(!list || list.length===0){ empty.show(); raw.hide(); return; } empty.hide(); try{ raw.text('推荐原始数据:\n'+JSON.stringify(list,null,2)).show(); }catch(err){ raw.hide(); }
-  (list||[]).forEach(function(c){ var name=c && (c.name||c.title||c.courseName); var credit=(c && (c.credit||c.credits)); ul.append('<li>'+(name||'未知')+'('+(credit!=null?credit:'未识别')+'学分)</li>'); }); }, function(e,r){ showErrStudents(r); }); }
+function loadRec(){ LW.rest('api/student', {action:'recommend'}, function(list){ var ul=$('#rec'); var empty=$('#rec-empty'); var raw=$('#rec-raw'); if(!list || list.length===0){ ul.empty(); empty.show(); raw.hide(); return; } empty.hide(); try{ raw.text('推荐原始数据:\n'+JSON.stringify(list,null,2)).show(); }catch(err){ raw.hide(); }
+  LW.renderList('#rec', list, function(c){ var name=c && (c.name||c.title||c.courseName); var credit=(c && (c.credit||c.credits)); return '<li>'+(name||'未知')+'('+(credit!=null?credit:'未识别')+'学分)</li>'; }); }, function(e,r){ showErrStudents(r); }); }
 // 导出成绩为 CSV（后端返回文件路径）
 $('#btn-export').on('click', function(){ LW.rest('api/student', {action:'grades_export'}, function(data){ $('#export-link').html('<a href="'+data.file+'" target="_blank">下载CSV</a>'); }, function(e,r){ showErrStudents(r); }); });
 // 页面加载：并行加载课表、成绩与推荐
