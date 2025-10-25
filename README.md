@@ -35,15 +35,15 @@
 - 重启 Tomcat：在 IDE 中或使用 `bin\\startup.bat`/`shutdown.bat`
 
 ## 五、接口速查与示例
-- 统一风格：所有接口返回 JSON，成功：`{ ok: true, data: ... }`，失败：`{ ok: false, code: ..., message: ... }`
-- 常用接口：
-  - 用户：`UserServlet?action=register|login|logout|reset_password`
-  - 课程：`CourseServlet?action=create|update|delete|list|filter`
-  - 选课：`EnrollServlet?action=enroll|drop|list`
-  - 学生：`StudentServlet?action=schedule|grades|recommend|export_csv`
-  - 管理员：`AdminServlet?action=stats|logs_query`
+- 统一风格：所有接口返回 JSON，成功：`{"error":0,"reason":"ok","data":...}`，失败：`{"error":非0,"reason":"错误原因"}`
+- 常用接口（统一使用 `POST` 且请求体为 JSON）：
+  - 用户：`/api/user`，`action=register|login|logout|reset`
+  - 课程：`/api/course`，`action=create|update|delete|list|filter`
+  - 选课：`/api/enroll`，`action=enroll|drop|mylist`
+  - 学生：`/api/student`，`action=calendar|grades|recommend|grades_export`
+  - 管理员：`/api/admin`，`action=stats|logs_query`
 - curl 示例（登录）：
-  - `curl "http://localhost:8080/training24-tomcat/UserServlet?action=login&username=student&password=123456"`
+  - `curl -X POST -H "Content-Type: application/json" -d "{\"action\":\"login\",\"username\":\"student\",\"password\":\"123456\"}" "http://localhost:8080/training24-tomcat/api/user"`
 
 ## 六、常见问题与排错
 - 404 页面/接口找不到：

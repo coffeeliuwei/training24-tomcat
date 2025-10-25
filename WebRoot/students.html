@@ -74,7 +74,7 @@ function loadCal(){
 function loadGrades(){
   // 先取课程列表，构造 courseId->name 映射，确保显示课程名称
   LW.rest('api/course', {action:'list'}, function(courses){
-    var cmap={}; (courses||[]).forEach(function(c){ if(c && c.courseId){ cmap[c.courseId] = c.name || c.title || c.courseName; } });
+    var cmap={}; (courses||[]).forEach(function(c){ if(c && (c.id || c.courseId)){ var key = c.id || c.courseId; cmap[key] = c.name || c.title || c.courseName; } });
     LW.rest('api/student', {action:'grades'}, function(list){
       var tb=$('#tbl-grade tbody'); tb.empty();
       (list||[]).forEach(function(e){
