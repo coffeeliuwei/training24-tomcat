@@ -68,3 +68,26 @@
   - 选课冲突与候补可复现（课程容量设为 1/2）
   - CSV 导出文件存在且内容含表头与时间戳
   - 管理员统计显示用户/课程/选课总数，日志可查询
+
+## 八、模拟数据样例（内存数据库）
+- 初始化说明：首次运行或调用 `DaoFactory.admin().seed()` 时注入示例数据；仅当用户表为空时注入。
+- 用户：
+  - `admin`（角色：admin，邮箱：admin@example.com）
+  - `alice`（角色：student，邮箱：alice@example.com）
+  - `bob`（角色：student，邮箱：bob@example.com）
+- 课程：
+  - `数据结构`（学分：3，容量：2，时间：Mon 10–12，Wed 10–12）
+  - `数据库原理`（学分：4，容量：2，时间：Tue 14–16，Thu 14–16）
+- 初始选课：
+  - `alice` → `数据结构`（enrolled）
+  - `bob` → `数据结构`（enrolled）
+  - `alice` → `数据库原理`（enrolled）
+- 初始成绩：
+  - `alice` / `数据结构`：`88.0`
+- 查询入口：
+  - 管理员统计：`/api/admin`，`action=stats`（返回 `users/courses/enrollments`）
+  - 学生成绩：`/api/student`，`action=grades`（返回列表项 `{userId,courseId,score,courseName}`）
+  - 学生课表：`/api/student`，`action=calendar`（返回事件 `{title,day,start,end}`）
+- 代码位置：
+  - `src/com/training/db/Db.java` 中 `seed()`、`setGrade()`、`enroll()` 等
+  - 通过 `DaoFactory.admin().seed()` 可触发示例数据初始化
