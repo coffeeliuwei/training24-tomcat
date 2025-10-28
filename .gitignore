@@ -1,0 +1,7 @@
+# Ignore teaching plan documents
+docs/web应用实训教案刘伟.docx
+docs/web应用实训教案.md
+
+# Optional: ignore exports and backups (left unchanged if needed)
+# WebRoot/exports/
+# WebRoot/_backup*/
