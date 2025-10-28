@@ -103,7 +103,17 @@ function renderRow(c){
   tr.append('<td>'+sel+'</td>');
   var td=$('<td/>' );
   var btn=$('<button class="btn">选课</button>');
-  btn.on('click', function(){ LW.rest('api/enroll', {action:'enroll', courseId:c.id}, function(data){ alert('状态: '+data.status); loadMine(); refreshCourses(true); }, function(e,r){ showErrEnroll(r); }); });
+  btn.on('click', function(){
+    LW.rest('api/enroll', {action:'enroll', courseId:c.id}, function(data){
+      // 即时更新“已选”列的显示，避免等待后续异步刷新
+      alert('状态: '+data.status);
+      try { if (data && data.status) { myStatusByCourseId[c.id] = data.status; } } catch(_){}
+      // 先重绘当前页，再拉取权威数据以同步状态
+      renderEnrollPage();
+      loadMine();
+      refreshCourses(true);
+    }, function(e,r){ showErrEnroll(r); });
+  });
   td.append(btn);
   tr.append(td);
   return tr;

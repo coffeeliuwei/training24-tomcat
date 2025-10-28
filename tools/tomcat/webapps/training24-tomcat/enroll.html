@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<!-- 初学者说明：学生选课页面，展示课程列表与“我的选课”。
+- 依赖接口：
+  - 课程：CourseServlet（`api/course`）`action=list|filter`
+  - 选课：EnrollServlet（`api/enroll`）`action=enroll|drop|mylist`
+  - 学生：StudentServlet（`api/student`）`action=calendar`（辅助显示课程名）
+  - 管理员检测：AdminServlet（`api/admin`）`action=stats`（成功则视为管理员）
+- 页面结构：导航 → 课程列表（分页）→ 我的选课（含退课按钮）→ 脚本逻辑
+- 学习建议：先看 table/pager 的 HTML 结构，再读下方脚本中数据加载与渲染链路（detectAdmin → list → mylist → calendar）。
+-->
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<title>学生选课</title>
+<!-- 资源引入：样式 + jQuery + LW 封装（LW.rest，统一调用后端） -->
+<link rel="stylesheet" href="assets/style.css" />
+<script src="https://cdn.jsdelivr.net/npm/jquery@3.6.0/dist/jquery.min.js"></script>
+<script src="assets/lwquery.js"></script>
+</head>
+<body>
+<header>
+  <!-- 顶部导航：不同角色均可访问此页，但管理员会看到“已选”列显示总人数 -->
+  <nav>
+    <a href="index.html">登录/注册</a>
+    <a href="courses.html">课程管理/查询</a>
+    <a href="enroll.html">选课</a>
+    <a href="students.html">学生视图</a>
+    <a href="admin.html">管理员</a>
+  </nav>
+</header>
+<main>
+  <!-- 课程列表：从 `api/course?action=list` 获取并分页展示；每行包含选课按钮 -->
+  <div class="card">
+    <h3>课程列表</h3>
+    <div class="error" id="err-enroll" style="display:none;color:#b00020;background:#ffecec;padding:6px;margin:6px 0;"></div>
+    <table class="table" id="tbl">
+      <thead><tr><th>课程</th><th>学分</th><th>时间</th><th>容量</th><th>已选</th><th>操作</th></tr></thead>
+      <tbody></tbody>
+    </table>
+    <div class="pager" id="pager-enroll" style="margin-top:8px;">
+      <button class="btn" id="pe-prev">上一页</button>
+      <span id="pe-info" style="margin:0 8px;">第 1 / 1 页，共 0 条</span>
+      <button class="btn" id="pe-next">下一页</button>
+      <span style="margin-left:12px;">每页</span>
+      <select id="pe-size">
+        <option>5</option>
+        <option selected>10</option>
+        <option>20</option>
+      </select>
+    </div>
+  </div>
+  <!-- 我的选课：展示已选课程；提供退课按钮；并展示原始数据便于调试/学习 -->
+  <div class="card">
+    <h3>我的选课</h3>
+    <ul id="mylist"></ul>
+    <pre id="mylist-raw" style="display:block;margin-top:8px;padding:6px;background:#f9f9f9;border:1px dashed #ccc;color:#444;font-size:12px;white-space:pre-wrap;"></pre>
+  </div>
+</main>
+<script>
+/* 脚本总览：
+- showErrEnroll：统一错误提示（顶部红框，自动隐藏）
+- enrollAll/pePage/peSize：课程列表数据与分页状态
+- isAdmin/myStatusByCourseId：角色与“我对每门课的选课状态”缓存
+- refreshCourses：从后端拉取课程列表并渲染
+- renderRow：渲染表格的一行；管理员显示总已选人数，学生显示本人是否已选
+- renderEnrollPage：根据分页状态渲染当前页课程
+- extractCourseId/extractStatus：从后端返回的对象/字符串中稳健提取课程ID与状态（适配不同序列化格式）
+- loadMine：先加载我的选课，再并行拉取课程列表与学生日历，用于补全课程名与状态；同时渲染退课按钮
+- detectAdmin：尝试调用管理员接口，成功则视为管理员（影响“已选”列的含义）
+- 分页事件：上一页/下一页/每页大小改变
+- 页面加载：优先检测管理员 → 拉取课程 → 加载我的选课
+*/
+// 统一错误提示框（3秒自动隐藏）
+function showErrEnroll(msg){ var box=$('#err-enroll'); box.text(msg).show(); setTimeout(function(){ box.fadeOut(200); }, 3000); }
+// 课程数据与分页状态；isAdmin 表示当前是否管理员；myStatus 缓存本人对每门课的状态
+var enrollAll=[], pePage=1, peSize=10;
+// 新增：管理员与我的选课状态缓存
+var isAdmin=false; var myStatusByCourseId={};
+// 拉取课程列表并渲染（keepPage=true 保持当前页不重置）
+function refreshCourses(keepPage){
+  LW.rest('api/course', {action:'list'}, function(items){ enrollAll=items||[]; if(!keepPage){ pePage=1; } renderEnrollPage(); }, function(e,r){ showErrEnroll(r); });
+}
+// 渲染表格行（含选课按钮）；管理员显示总已选人数；学生显示本人是否已选
+function renderRow(c){
+  var times=(c.times||[]).map(t=>t.day+" "+t.start+"-"+t.end).join('; ');
+  var tr=$('<tr/>' );
+  tr.append('<td>'+c.name+'</td>');
+  tr.append('<td>'+c.credit+'</td>');
+  tr.append('<td>'+times+'</td>');
+  tr.append('<td>'+c.capacity+'</td>');
+  // 修改：已选列，对于管理员展示总数；学生展示本人是否已选
+  var sel;
+  var st = myStatusByCourseId[c.id];
+  if(isAdmin){
+    sel = (c.enrolled||0);
+  } else if(st === 'enrolled'){
+    sel = '是';
+  } else if(st){
+    sel = '否';
+  } else {
+    sel = '—'; // 我的选课尚未加载时用占位符
+  }
+  tr.append('<td>'+sel+'</td>');
+  var td=$('<td/>' );
+  var btn=$('<button class="btn">选课</button>');
+  btn.on('click', function(){ LW.rest('api/enroll', {action:'enroll', courseId:c.id}, function(data){ alert('状态: '+data.status); loadMine(); refreshCourses(true); }, function(e,r){ showErrEnroll(r); }); });
+  td.append(btn);
+  tr.append(td);
+  return tr;
+}
+// 根据分页状态渲染当前页
+function renderEnrollPage(){
+  var total=enrollAll.length; var max=Math.max(1, Math.ceil(total/peSize));
+  pePage=Math.min(pePage, max);
+  var start=(pePage-1)*peSize; var items=enrollAll.slice(start, start+peSize);
+  var tbody=$('#tbl tbody'); tbody.empty();
+  items.forEach(function(c){ tbody.append( renderRow(c) ); });
+  $('#pe-info').text('第 '+pePage+' / '+max+' 页，共 '+total+' 条');
+}
+// 统一入口：渲染课程列表（供 list/filter 回调使用）
+function renderCourses(items){ enrollAll = items || []; pePage = 1; renderEnrollPage(); }
+// 从多种格式中提取课程ID（字符串/对象的不同字段名）
+function extractCourseId(e){
+  if(!e) return undefined;
+  if(typeof e==='string'){
+    try{ var obj=JSON.parse(e); if(obj.courseId) return obj.courseId; }catch(err){}
+    var m=e.match(/courseId\s*[:=]\s*['\"]?([a-zA-Z0-9_-]+)['\"]?/i); if(m) return m[1];
+    return undefined;
+  }
+  if(e.courseId) return e.courseId;
+  if(e.course_id) return e.course_id;
+  if(e.course && e.course.id) return e.course.id;
+  if(e.id) return e.id; // 某些序列化可能直接给id
+  var keys=Object.keys(e||{}); // 再做一次兜底：查找类似字段
+  for(var i=0;i<keys.length;i++){ var k=keys[i]; if(/courseid|course_id/i.test(k)) return e[k]; }
+  return undefined;
+}
+// 从多种格式中提取状态（字符串中解析或对象字段）
+function extractStatus(e){
+  if(!e) return undefined;
+  if(typeof e==='string'){
+    var m=e.match(/status\s*[:=]\s*['\"]?([a-zA-Z]+)['\"]?/i); if(m) return m[1];
+    try{ var obj=JSON.parse(e); if(obj.status) return obj.status; }catch(err){}
+    return undefined;
+  }
+  return e.status || e.state || e.result || undefined;
+}
+// 加载“我的选课”，并补全名称与状态（必要时用课表事件回填）
+function loadMine(){
+  LW.rest('api/enroll', {action:'mylist'}, function(list){
+    // 缓存我的选课状态
+    myStatusByCourseId={};
+    (list||[]).forEach(function(e){ var cid=extractCourseId(e); var st=extractStatus(e); if(cid) myStatusByCourseId[cid]=st; });
+    // 调试：展示后端原始数据
+    try{ $('#mylist-raw').text('后端返回原始数据:\n'+JSON.stringify(list,null,2)+'\n类型:'+ (Array.isArray(list)?'Array':'type='+typeof list)); }catch(err){}
+    // 并行获取课程列表与日历（含课程名）
+    LW.rest('api/course', {action:'list'}, function(courses){
+      LW.rest('api/student', {action:'calendar'}, function(events){
+        var cmap={}, name2id={}; (courses||[]).forEach(function(c){ cmap[c.id]=c; name2id[c.name]=c.id; });
+        var titles=(events||[]).map(function(ev){ return ev.title; });
+        var ul=$('#mylist'); ul.empty();
+        // 检测 mylist 是否为空对象数组（后端未序列化到字段的情况），则用课表事件回填
+        var brokenArray = Array.isArray(list) && list.length>0 && list.every(function(e){ return e && typeof e==='object' && Object.keys(e).length===0; });
+        if(brokenArray){
+          // 用课表事件（标题）生成条目
+          var seen={};
+          titles.forEach(function(t){ if(seen[t]) return; seen[t]=true; var cid=name2id[t]; var st='enrolled'; var li=$('<li/>').text(t+' ('+st+')'); var btn=$('<button class="btn">退课</button>'); btn.on('click', function(){ if(!cid){ showErrEnroll('无法识别课程ID，无法退课'); return; } LW.rest('api/enroll', {action:'drop', courseId:cid}, function(){ alert('已退课'); loadMine(); refreshCourses(true); }, function(er,rr){ showErrEnroll(rr); }); }); li.append(' '); li.append(btn); ul.append(li); });
+          if(Object.keys(seen).length===0){ ul.append($('<li/>').text('未识别到选课，请稍后重试')); }
+          return; // 已渲染
+        }
+        // 正常路径：渲染 mylist
+        (list||[]).forEach(function(e){
+          var cid=extractCourseId(e); var st=extractStatus(e);
+          var name = (e && e.name) ? e.name : (cmap[cid]? cmap[cid].name: undefined);
+          if(!name){
+            for(var i=0;i<titles.length;i++){ var t=titles[i]; if(name2id[t]){ name=t; cid=name2id[t]; break; } }
+            if(!name) name='未知课程';
+            if(!st && name!=='未知课程') st='enrolled';
+          }
+          var li=$('<li/>').text(name+' ('+(st||'未识别')+')');
+          var btn=$('<button class="btn">退课</button>');
+          btn.on('click', function(){ if(!cid){ showErrEnroll('无法识别课程ID，无法退课'); return; } LW.rest('api/enroll', {action:'drop', courseId:cid}, function(){ alert('已退课'); loadMine(); refreshCourses(true); }, function(er,rr){ showErrEnroll(rr); }); });
+          li.append(' '); li.append(btn); ul.append(li);
+        });
+        // mylist 加载后刷新课程列表，确保“已选”列显示本人状态
+        renderEnrollPage();
+      }, function(e2,r2){ var cmap={}, name2id={}; (courses||[]).forEach(function(c){ cmap[c.id]=c; name2id[c.name]=c.id; }); var ul=$('#mylist'); ul.empty(); (list||[]).forEach(function(e){ var cid=extractCourseId(e); var st=extractStatus(e); var name=cmap[cid]? cmap[cid].name: '未知课程'; var li=$('<li/>').text(name+' ('+(st||'未识别')+')'); var btn=$('<button class="btn">退课</button>'); btn.on('click', function(){ if(!cid){ showErrEnroll('无法识别课程ID，无法退课'); return; } LW.rest('api/enroll', {action:'drop', courseId:cid}, function(){ alert('已退课'); loadMine(); $('#btn-list').click(); }, function(er,rr){ showErrEnroll(rr); }); }); li.append(' '); li.append(btn); ul.append(li); }); renderEnrollPage(); });
+    }, function(e1,r1){ showErrEnroll(r1); });
+  }, function(e,r){ showErrEnroll(r); });
+}
+// 分页按钮与每页大小事件绑定
+$('#pe-prev').on('click', function(){ if(pePage>1){ pePage--; renderEnrollPage(); } });
+$('#pe-next').on('click', function(){ var max=Math.max(1, Math.ceil(enrollAll.length/peSize)); if(pePage<max){ pePage++; renderEnrollPage(); } });
+$('#pe-size').on('change', function(){ peSize = Number($(this).val()); pePage = 1; renderEnrollPage(); });
+// 探测是否管理员（管理员显示总已选人数）
+function detectAdmin(cb){ LW.rest('api/admin', {action:'stats'}, function(data){ isAdmin=true; if(typeof cb==='function') cb(); }, function(){ isAdmin=false; if(typeof cb==='function') cb(); }); }
+// 文档就绪：先检测管理员，再加载课程与我的选课
+$(function(){ detectAdmin(function(){ renderEnrollPage(); }); LW.rest('api/course', {action:'list'}, renderCourses, function(e,r){ showErrEnroll(r); }); loadMine(); });
+</script>
+</body>
+</html>
